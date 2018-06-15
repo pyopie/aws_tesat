@@ -1,0 +1,562 @@
+{% extends "layout.html" %}
+{% block content %}
+ <h1>DLDM Test Web App</h1>
+<table>
+</table>
+Hi Test Canvas Min {{photos.re_job}}
+<br>
+
+<style type="text/css">
+
+canvas {
+
+border: 1px solid black;
+
+}
+
+</style>
+
+<canvas id="can1" width="600" height="600"  ></canvas>
+<canvas id="can2" width="600" height="600"  ></canvas>
+
+<br/>
+<input type="button" value="Undo" onclick="Undo(0)">
+<input type="button" value="WritePloy" onclick="PloySet(1)">
+<input type="button" value="BlackPloy" onclick="PloySet(0)">
+
+
+
+
+<form id="frm1" action="" method="post" enctype="multipart/form-data">
+    {%csrf_token %}
+    <button type="submit" id="prev_btn" class="btn btn-primary wide" name="prev" onClick="send_coordinate1()">
+    <span class="glyphicon glyphicon-search"></span>&nbsp prev
+    </button>
+    <button type="submit" id="next_btn" class="btn btn-primary wide" name="next" onClick="send_coordinate2()">
+    <span class="glyphicon glyphicon-search"></span>&nbsp next
+    </button>
+</form>
+
+
+<img id="photo" src="{{photos.file.url}}" alt="scream"/>
+<img id="photo_m" src="{{photos.check_file.url}}" alt="scream"/>
+
+
+
+
+<input type="button" name="delete" value="delete" onclick="delete_label()" >
+ <input type="file" id="loadImg"><br/>
+ <input type="button" value="undoBox" onclick="test(0)"><br/>
+ <input type="button" value="save" onclick="save(0)"><br/>
+ <a href="#" id="link" download="sample.json">download</a>
+<form id="jsonFile" name="jsonFile" enctype="multipart/form-data" method="post">
+  <fieldset>
+    <h2>Json File</h2>
+     <input type='file' id='fileinput'>
+     <input type='button' id='btnLoad' value='Load' onclick='loadFile();'>
+  </fieldset>
+</form>
+
+
+
+<script type="text/javascript">
+        var canvas = document.getElementById("can1");   // Canvas 객체 얻어오기
+        var canvas2 = document.getElementById("can2");   // Canvas 객체 얻어오기
+        var cv = canvas.getContext("2d");
+        var cv2 = canvas2.getContext("2d");
+
+        var cv1 = canvas.getContext("2d");
+        var cv2 = canvas2.getContext("2d");
+
+
+        document.getElementById("photo").addEventListener("load", loadListener1);
+        document.getElementById("photo").addEventListener("load", loadListener2);
+
+
+
+
+        var img=document.getElementById("photo");   //image 객체 얻기
+        //img.style.visibility='hidden';             // image 객제 숨기기(화면에 보이지 않도록)
+
+        var img2=document.getElementById("photo_m");   //image 객체 얻기
+        //img.style.visibility='hidden';             // image 객제 숨기기(화면에 보이지 않도록)
+
+        //debug var
+        var d_c_position_x = 0;
+        var d_c_position_y = 0;
+        var d_s_position_x = 0;
+        var d_s_position_y = 0;
+        var d_e_position_w = 0;
+        var d_e_position_h = 0;
+        var real_position_x = 0;
+        var real_position_y = 0;
+        var real_position_w = 0;
+        var real_position_h = 0;
+
+
+
+        //Canvas Margin
+        var marginx = 40;
+        var marginy = 40;
+        var canvas_size = 500;
+        var text_msg_size = 50;
+        var dx = 1;
+        var dy = 1;
+        var image_size_x = 0;
+        var image_size_y = 0;
+        canvas.width = canvas_size + marginx*2;
+        canvas.height = canvas_size + text_msg_size + marginy;
+
+        canvas2.width = canvas_size + marginx*2;
+        canvas2.height = canvas_size + text_msg_size + marginy;
+
+        //offset
+        var rect = canvas.getBoundingClientRect();
+        var x_offset = rect.left;
+        var y_offset = rect.top;
+
+           //좌표 Data
+        var s_x = 0;          //Rect 시작점 X
+        var s_y = 0;          //Rect 시작점 Y
+        var e_x = 0;        //Rect 끝점 X
+        var e_y = 0;          //Rect 끝점 Y
+
+        //이동하고 있는 좌표
+        var m_x = 0;
+        var m_y = 0;
+
+        var c_flag = 0;    // Click Flag
+        var s_flag = 0;    // Start Flag
+
+
+        var box_num = 0;                    //Lanel 갯수
+        var box_s_x = new Array();          //현재 작업 된 Box 좌표
+        var box_s_y = new Array();
+        var box_e_x = new Array();
+        var box_e_y = new Array();
+        var box_label = new Array();          //나중에 Box Name 설정을 위해~ Radio or Check Box 로 받으면 좋을듯
+
+        var poly_x = new Array();
+        var poly_y = new Array();
+        var poly_set_x = new Array();
+        var poly_set_y = new Array();
+        var poly_color_ori = new Array();
+        var poly_color_mask = new Array();
+        var poly_num = 0;
+        var poly_set_num = 0;
+
+        var file_name;                       //현재 작업 File Name
+
+        var boxArray = new Array();         //Json 파일 저장을 위한 Box Array
+
+        var image_ratio_x =1.0, image_ratio_y =1.0; //Image Resize 비율
+        loadImg();
+        cv1.beginPath();
+        cv2.beginPath();
+
+
+         poly_color_ori[poly_set_num] = "rgba(255, 255, 255, 0.3)"
+         poly_color_mask[poly_set_num] = "rgba(255, 255, 255, 1.0)"
+         poly_set_x[poly_set_num] = new Array();
+         poly_set_y[poly_set_num] = new Array();
+
+
+      canvas.onmousedown = function (event) {             //  Function: 마우스 클릭 했을 때 Rect 시작 좌표 얻어옴
+        s_x = Math.floor(event.x-x_offset);
+        s_y = Math.floor(event.y-y_offset);
+
+        if(s_x<marginx) s_x = marginx;
+        if(s_x>marginx+canvas_size) s_x =marginx+canvas_size;
+        if(s_y<text_msg_size) s_y = text_msg_size;
+        if(s_y>text_msg_size+canvas_size) s_y =text_msg_size+canvas_size;
+        console.log("poly_set_x.length = "+poly_set_x.length);
+        console.log("poly_num = "+poly_num);
+        console.log("poly_set_num = "+poly_set_num);
+        console.log("===================================================");
+        //c_flag = 1;
+      }
+      canvas.onmousemove=function(event){             // Function: 마우스 이동 중일 때  가이드선 그리고, 기존 및 현재 그리고 있는 Box Canvas에 Update
+            m_x = Math.floor(event.x-x_offset);
+            m_y = Math.floor(event.y-y_offset);
+
+            if(m_x<marginx) m_x = marginx;
+            if(m_x>(marginx+(canvas_size/dx))) m_x =(marginx+(canvas_size/dx));
+            if(m_y<text_msg_size) m_y = text_msg_size;
+            if(m_y>((canvas_size/dy)+text_msg_size)) m_y = ((canvas_size/dy)+text_msg_size);
+
+            e_x = m_x-s_x;
+            e_y = m_y-s_y;
+
+            if (s_flag==1) canvas_reload();
+            else cv.clearRect(0, 0, canvas.width, canvas.height);        //Update를 위한 Canvas 지우기
+            cv.beginPath();                                         //가이드선 그리기
+            cv.lineWidth="1";
+            cv.strokeStyle="green";
+            cv.moveTo(m_x,0);
+            cv.lineTo(m_x,canvas.height);
+            cv.stroke();
+            cv.beginPath();
+            cv.moveTo(0,m_y);
+            cv.lineTo(canvas.width,m_y);
+            cv.stroke();
+
+            if (c_flag==1)                                      //Box를 그리고 있는 중이면 그리고 있는 Box 업데이트
+            {
+                cv.beginPath();
+                cv.lineWidth="3";
+                cv.strokeStyle="red";
+                cv.rect(s_x, s_y, e_x, e_y);
+                cv.stroke();
+            }
+
+            draw_poly();
+
+            d_c_position_x = Math.floor(m_x-marginx);
+            d_c_position_y = Math.floor(m_y-text_msg_size);
+            d_s_position_x = Math.floor(s_x-marginx);
+            d_s_position_y = Math.floor(s_y-text_msg_size);
+            d_e_position_w = Math.floor(e_x);
+            d_e_position_h = Math.floor(e_y);
+
+            real_position_x = Math.floor(d_s_position_x*image_ratio_x);
+            real_position_y = Math.floor(d_s_position_y*image_ratio_y);
+            real_position_w = Math.floor(d_e_position_w*image_ratio_x);
+            real_position_h = Math.floor(d_e_position_h*image_ratio_y);
+            var message = 'canvas : '+d_c_position_x+'(cx), '+d_c_position_y+'(cy), '+d_s_position_x+'(sx), '+d_s_position_y+'(sy), '+d_e_position_w+'(ex), '+d_e_position_h+'(ey), real : '+real_position_x+'(x), '+real_position_y+'(y), '+real_position_w+'(w), '+real_position_h+ '(h), img size: '+img.width+'(w)/'+img.height+'(h)';
+            writeMessage(canvas, message);
+      }
+      canvas.onmouseup = function (event) {                       // Function: 마우스 클릭해제 현재 그리린 Box 를 저장해 계속 Canvs에 나타나도록 함 box_num++(Box 갯수 증가)
+        s_x = Math.floor(event.x-x_offset);
+        s_y = Math.floor(event.y-y_offset);
+
+        if(s_x<marginx) s_x = marginx;
+        if(s_x>(marginx+(canvas_size/dx))) s_x =(marginx+(canvas_size/dx));
+        if(s_y<text_msg_size) s_y = text_msg_size;
+        if(s_y>((canvas_size/dy)+text_msg_size)) s_y = ((canvas_size/dy)+text_msg_size);
+/*
+        if(poly_num == 0)
+        {
+           cv.beginPath();
+           cv2.beginPath();
+           cv1.moveTo(s_x,s_y);
+           cv2.moveTo(s_x,s_y);
+        }
+        else
+        {
+           cv1.lineTo(s_x,s_y);
+           cv2.lineTo(s_x,s_y);
+        }
+*/
+          poly_set_x[poly_set_num][poly_num] = s_x;
+          poly_set_y[poly_set_num][poly_num] = s_y;
+          console.log("poly_set_x = "+poly_set_x[poly_set_num][poly_num]+",  s_x = "+s_x+", poly_set_y = "+poly_set_y[poly_set_num][poly_num]+",  s_y = "+s_y+", poly_set_num"+poly_set_num+",  poly_num = "+poly_num);
+          console.log("===================================================");
+
+          poly_num++;
+      }
+
+      function draw_poly()
+      {
+          console.log("draw_poly");
+          for (var s= 0; s<poly_set_x.length; s++)
+            {
+                var poly_x = poly_set_x[s] ;
+                var poly_y = poly_set_y[s] ;
+                var zero_flag = 0;
+                 if(poly_num>1)
+                {
+                    for (var p=0; p<poly_y.length; p++)
+                    {
+                        if(poly_x[p]!=null)
+                        {
+                            if(p==0)
+                            {
+                                cv1.fillStyle = poly_color_ori[s];
+                                cv2.fillStyle = poly_color_mask[s];
+                                cv1.beginPath();
+                                cv1.moveTo(poly_x[p], poly_y[p]);
+                                cv2.beginPath();
+                                cv2.moveTo(poly_x[p], poly_y[p]);
+                                zero_flag = 1;
+                            }
+                            else
+                            {   if(zero_flag==1)
+                                {
+                                    cv1.lineTo(poly_x[p], poly_y[p]);
+                                    cv2.lineTo(poly_x[p], poly_y[p]);
+                                }
+
+                            }
+                        }
+                    }
+                }
+                cv1.closePath();
+                cv1.fill();
+                cv2.closePath();
+                cv2.fill();
+            }
+      }
+      function canvas_reload()
+      {
+           loadImg_1();
+      }
+      function writeMessage(canvas, message) {        //디버깅용 상단 Text 출력
+          cv.font = '18pt Calibri';
+          cv.fillStyle = 'black';
+          cv.fillText(message, 10, 25);
+      }
+      function loadImg_1(){
+            cv.clearRect(0, 0, canvas.width, canvas.height);        //Update를 위한 Cavas 지우기
+            cv.drawImage(img, marginx,text_msg_size,image_size_x,image_size_y);
+            cv.stroke();
+
+            cv2.clearRect(0, 0, canvas2.width, canvas2.height);        //Update를 위한 Cavas 지우기
+            cv2.drawImage(img2, marginx,text_msg_size,image_size_x,image_size_y);
+            cv2.stroke();
+            draw_poly();
+
+      }
+
+      function loadImg_0(){
+            cv.clearRect(0, 0, canvas.width, canvas.height);
+            box_num = 0;
+            var cnt =0;
+            var load_cnt = 0;
+            console.log("Image Src: "+img.src);
+
+            image_ratio_x = img.width / (canvas.width-(marginx*2));
+            image_ratio_y = img.height/ (canvas.height - (text_msg_size)-marginy);
+
+            var message = 'Image Size :  rx: ' + image_ratio_x + ',  ry: ' + image_ratio_y + ' , w: '+ img.width + ' , h: '+ img.height;
+            writeMessage(canvas, message);
+
+            if (image_ratio_x >image_ratio_y)
+            {
+            image_ratio_y = image_ratio_x;
+            }
+            else
+            {
+            image_ratio_x = image_ratio_y;
+            }
+            image_size_x = img.width/image_ratio_x;
+            image_size_y = img.height/image_ratio_y;
+            dx = (canvas.width-(marginx*2)) / image_size_x;
+            dy = (canvas.height - (marginy+text_msg_size)) / image_size_y;
+            console.log("dx: "+dx+" ,  dy: "+dy);
+            cv.drawImage(img, marginx,text_msg_size,image_size_x,image_size_y);
+
+            cv.stroke();
+            s_flag = 1;
+
+
+            loadImg_1();
+        }
+
+       function loadListener1()
+        {
+            loadImg_0();
+        }
+
+        function loadListener2()
+        {
+           loadImg_0();
+        }
+
+        function loadImg()
+        {
+
+            loadImg_0();
+        }
+
+      function delay(gap) { /* gap is in millisecs */
+         var then,now;
+         then = new Date().getTime();
+         now = then;
+         while((now - then) < gap) {
+            now = new Date().getTime();
+         }
+     }
+      function test(mode){
+          box_num--;
+          if (box_num<0) box_num = 0;
+          canvas_reload();
+          var message = 'changeMode :  ' + mode+ ','+box_num;
+          console.log("test" + message);
+      }
+
+      function PloySet(mode){
+
+          poly_num=0;
+          poly_set_num++;
+          if(mode == 0)
+          {
+            poly_color_ori[poly_set_num] = "rgba(0, 0, 0, 0.3)";
+            poly_color_mask[poly_set_num] = "rgba(0, 0, 0, 1.0)";
+          }
+          else if(mode ==1)
+          {
+            poly_color_ori[poly_set_num] = "rgba(255, 255, 255, 0.3)";
+            poly_color_mask[poly_set_num] = "rgba(255, 255, 255, 1.0)";
+          }
+          poly_set_x[poly_set_num] = new Array();
+          poly_set_y[poly_set_num] = new Array();
+      }
+
+      function Undo(mode){
+        poly_set_x[poly_set_num][poly_num]=null;
+        poly_num--;
+     }
+
+      function send_coordinate1(){
+          var c_info;
+          var btn = document.getElementById("prev_btn");
+          var frm = document.getElementById("frm1");
+
+          for (var i = 0 ; i < box_num; i++){
+              if (i==0) c_info = box_label[i];
+              else c_info += ","+box_label[i];
+              c_info += ","+parseInt(box_s_x[i]*image_ratio_x);
+              c_info +=","+ parseInt((box_s_y[i]-50)*image_ratio_y);
+              c_info +=","+ parseInt(box_e_x[i]*image_ratio_x);
+              c_info +=","+ parseInt((box_e_y[i]-50)*image_ratio_y);
+
+          }
+          box_s_x.splice(0, box_num);
+          box_s_y.splice(0, box_num);
+          box_e_x.splice(0, box_num);
+          box_e_y.splice(0, box_num);
+          box_num =0;
+          btn.setAttribute("value", c_info);
+          frm.setAttribute = ("action", "{% url "m_index" %}");
+          frm.submit();
+
+
+      }
+      function send_coordinate2(){
+          var c_info;
+          var btn = document.getElementById("next_btn");
+          var frm = document.getElementById("frm1");
+
+          for (var i = 0 ; i < box_num; i++){
+              if (i==0) c_info = box_label[i];
+              else c_info += ","+box_label[i];
+              c_info += ","+parseInt(box_s_x[i]*image_ratio_x);
+              c_info +=","+ parseInt((box_s_y[i]-50)*image_ratio_y);
+              c_info +=","+ parseInt(box_e_x[i]*image_ratio_x);
+              c_info +=","+ parseInt((box_e_y[i]-50)*image_ratio_y);
+
+          }
+          box_s_x.splice(0,box_num);
+          box_s_y.splice(0, box_num);
+          box_e_x.splice(0, box_num);
+          box_e_y.splice(0, box_num);
+          box_num =0;
+          btn.setAttribute("value", c_info);
+          frm.setAttribute = ("action", "{% url "m_index" %}");
+          frm.submit();
+
+
+      }
+
+      function aa(value){
+          console.log(value);
+      }
+      function select_current_label(){
+          console.log(label_list.selectedIndex);
+          current_label = label_list.selectedIndex;
+          console.log(current_label);
+          canvas_reload();
+      }
+      function delete_label(){
+          label_list.remove(label_list.selectedIndex);
+
+          if(current_label>0){
+              box_s_x.splice(current_label, 1);
+              box_s_y.splice(current_label, 1);
+              box_e_x.splice(current_label, 1);
+              box_e_y.splice(current_label, 1);
+              box_label.splice(current_label, 1);
+              box_num--;
+              current_label = -1;
+          }
+          for (var i = 0 ; i < box_num; i++){
+              console.log(i);
+              console.log(box_label[i]);
+          }
+          canvas_reload();
+      }
+      function make_label(h, ldata){
+          text_label= document.getElementById('txt_label');
+          if(h==0){
+              label_h = ldata;
+              label = ldata;
+              text_label.setAttribute("value", label);
+
+
+           }else{
+              label = label_h + ldata;
+              text_label.setAttribute("value", label);
+
+           }
+      }
+      function save(mode){
+          var boxInfo = new Object();         //Json 파일 저장을 위한 Box Info
+          boxInfo.filename = file_name;
+          boxInfo.box_num = box_num;
+          for (var i = 0 ; i < box_num; i++)
+          {
+              if (i==0) boxInfo.box_point = parseInt(box_s_x[i]*image_ratio_x);
+              else boxInfo.box_point += ","+parseInt(box_s_x[i]*image_ratio_x);
+              boxInfo.box_point +=","+ parseInt((box_s_y[i]-50)*image_ratio_y);
+              boxInfo.box_point +=","+ parseInt(box_e_x[i]*image_ratio_x);
+              boxInfo.box_point +=","+ parseInt((box_e_y[i]-50)*image_ratio_y);
+          }
+          boxArray.push(boxInfo);
+          var obj_s = JSON.stringify(boxArray, null, "\t");
+          var dataUri = "data:application/json;charset=utf-8,"+ encodeURIComponent(obj_s);
+          var link = $("#link").attr("href", dataUri);
+          console.log("save " +  obj_s);
+          console.log("save  " + file_name);
+          console.log("save  " + boxArray.length);
+      }
+      function readFile(filename){
+          var fso = new ActiveXObject("Scripting.FileSystemObject");
+          var ForReading = 1;
+          var f1 = fso.OpenTextFile(filename, ForReading);
+          var text = f1.ReadAll();
+          f1.close();
+          writeMessage(canvas, text);
+          return text;
+      }
+      function loadFile() {
+          var input, file, fr;
+          if (typeof window.FileReader !== 'function') {
+            alert("The file API isn't supported on this browser yet.");
+            return;
+          }
+          input = document.getElementById('fileinput');
+          if (!input) {
+            alert("Um, couldn't find the fileinput element.");
+          }
+          else if (!input.files) {
+            alert("This browser doesn't seem to support the `files` property of file inputs.");
+          }
+          else if (!input.files[0]) {
+            alert("Please select a file before clicking 'Load'");
+          }
+          else {
+            file = input.files[0];
+            fr = new FileReader();
+            fr.onload = receivedText;
+            fr.readAsText(file);
+          }
+          function receivedText(e) {
+              lines = e.target.result;
+              var newArr = JSON.parse(lines);
+              result_json = newArr;
+              console.log("loaded json file "+newArr);
+              j_flag = 1;
+          }
+        }
+  </script>
+{% endblock %}
